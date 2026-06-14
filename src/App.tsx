@@ -6,6 +6,7 @@ import {
   Send, Lock, Plus, Pencil, Trash2, X, Menu,
 } from "lucide-react";
 import { loadData, saveData, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
+import { fetchProjects, upsertProject, deleteProject, fetchCertifications, upsertCertification, deleteCertification } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -720,14 +721,31 @@ function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Part
   const empty: Project = { id: "", title: "", description: "", image: "", tech: [], github: "", demo: "", category: "Web Development" };
   const [editing, setEditing] = useState<Project | null>(null);
 
-  const save = (p: Project) => {
+  const save = async (p: Project) => {
     const id = p.id || `p${Date.now()}`;
+    const nextProject = { ...p, id };
     const exists = data.projects.find((x) => x.id === id);
-    const next = exists ? data.projects.map((x) => x.id === id ? { ...p, id } : x) : [...data.projects, { ...p, id }];
-    update({ projects: next });
-    setEditing(null); toast.success("Saved");
+    const next = exists ? data.projects.map((x) => x.id === id ? nextProject : x) : [...data.projects, nextProject];
+    try {
+      await upsertProject(nextProject);
+      update({ projects: next });
+      setEditing(null);
+      toast.success("Saved");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not save project to Supabase.");
+    }
   };
-  const del = (id: string) => { update({ projects: data.projects.filter((p) => p.id !== id) }); toast.success("Deleted"); };
+  const del = async (id: string) => {
+    try {
+      await deleteProject(id);
+      update({ projects: data.projects.filter((p) => p.id !== id) });
+      toast.success("Deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not delete project from Supabase.");
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -763,14 +781,31 @@ function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Part
 function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
   const empty: Certification = { id: "", name: "", issuer: "", date: "", image: "", url: "" };
   const [editing, setEditing] = useState<Certification | null>(null);
-  const save = (c: Certification) => {
+  const save = async (c: Certification) => {
     const id = c.id || `c${Date.now()}`;
+    const nextCert = { ...c, id };
     const exists = data.certifications.find((x) => x.id === id);
-    const next = exists ? data.certifications.map((x) => x.id === id ? { ...c, id } : x) : [...data.certifications, { ...c, id }];
-    update({ certifications: next });
-    setEditing(null); toast.success("Saved");
+    const next = exists ? data.certifications.map((x) => x.id === id ? nextCert : x) : [...data.certifications, nextCert];
+    try {
+      await upsertCertification(nextCert);
+      update({ certifications: next });
+      setEditing(null);
+      toast.success("Saved");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not save certification to Supabase.");
+    }
   };
-  const del = (id: string) => { update({ certifications: data.certifications.filter((c) => c.id !== id) }); toast.success("Deleted"); };
+  const del = async (id: string) => {
+    try {
+      await deleteCertification(id);
+      update({ certifications: data.certifications.filter((c) => c.id !== id) });
+      toast.success("Deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not delete certification from Supabase.");
+    }
+  };
   return (
     <div className="space-y-3">
       <Button size="sm" onClick={() => setEditing(empty)} className="bg-primary text-primary-foreground"><Plus className="h-4 w-4 mr-1" /> Add Certification</Button>
@@ -831,6 +866,22 @@ function Portfolio() {
 
   useEffect(() => {
     setData(loadData());
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRemote = async () => {
+      try {
+        const [projects, certifications] = await Promise.all([fetchProjects(), fetchCertifications()]);
+        if (!mounted) return;
+        setData((prev) => ({ ...prev, projects, certifications }));
+      } catch (error) {
+        console.error(error);
+        toast.error("Could not load projects/certifications from Supabase. Using local data.");
+      }
+    };
+    loadRemote();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
