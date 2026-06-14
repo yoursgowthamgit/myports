@@ -93,19 +93,10 @@ export const DEFAULT_DATA: PortfolioData = {
   adminPassword: "admin123",
 };
 
-const KEY = "portfolio_data_v1";
-
 export function loadData(): PortfolioData {
-  if (typeof window === "undefined") return DEFAULT_DATA;
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_DATA;
-    return { ...DEFAULT_DATA, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_DATA;
-  }
+  return DEFAULT_DATA;
 }
 
 export function saveData(data: PortfolioData) {
-  localStorage.setItem(KEY, JSON.stringify(data));
+  // Local storage persistence removed. Use Supabase as the primary storage backend.
 }

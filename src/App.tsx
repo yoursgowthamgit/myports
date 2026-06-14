@@ -5,7 +5,7 @@ import {
   Sparkles, Cpu, Layers, Wrench, GraduationCap, Award, Terminal as TerminalIcon,
   Send, Lock, Plus, Pencil, Trash2, X, Menu,
 } from "lucide-react";
-import { loadData, saveData, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
+import { DEFAULT_DATA, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
 import { fetchProjects, upsertProject, deleteProject, fetchCertifications, upsertCertification, deleteCertification, fetchProfileSettings, upsertProfileSettings } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -682,7 +682,7 @@ function AdminPanel({
 
   const update = (patch: Partial<PortfolioData>) => {
     const next = { ...data, ...patch };
-    setData(next); saveData(next);
+    setData(next);
   };
 
   if (!open) return null;
@@ -874,14 +874,10 @@ function ProfileAdmin({ data, update, profileSettingsId, setProfileSettingsId }:
 
 // === Root ===
 function Portfolio() {
-  const [data, setData] = useState<PortfolioData>(() => loadData());
+  const [data, setData] = useState<PortfolioData>(() => DEFAULT_DATA);
   const [active, setActive] = useState("home");
   const [adminOpen, setAdminOpen] = useState(false);
   const [profileSettingsId, setProfileSettingsId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setData(loadData());
-  }, []);
 
   useEffect(() => {
     let mounted = true;
