@@ -6,7 +6,7 @@ import {
   Send, Lock, Plus, Pencil, Trash2, X, Menu,
 } from "lucide-react";
 import { loadData, saveData, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
-import { fetchProjects, upsertProject, deleteProject, fetchCertifications, upsertCertification, deleteCertification } from "@/lib/supabase";
+import { fetchProjects, upsertProject, deleteProject, fetchCertifications, upsertCertification, deleteCertification, fetchProfileSettings, upsertProfileSettings } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -708,7 +708,7 @@ function AdminPanel({
             <div className="mt-4">
               {tab === "projects" && <ProjectsAdmin data={data} update={update} />}
               {tab === "certs" && <CertsAdmin data={data} update={update} />}
-              {tab === "profile" && <ProfileAdmin data={data} update={update} />}
+              {tab === "profile" && <ProfileAdmin data={data} update={update} profileSettingsId={profileSettingsId} setProfileSettingsId={setProfileSettingsId} />}
             </div>
           </div>
         )}
@@ -835,11 +835,25 @@ function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial
   );
 }
 
-function ProfileAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
+function ProfileAdmin({ data, update, profileSettingsId, setProfileSettingsId }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void; profileSettingsId: string | null; setProfileSettingsId: (id: string | null) => void }) {
   const [d, setD] = useState(data);
   useEffect(() => setD(data), [data]);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const id = await upsertProfileSettings(d, profileSettingsId || undefined);
+      setProfileSettingsId(id);
+      update(d);
+      toast.success("Profile updated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not save profile settings to Supabase.");
+    }
+  };
+
   return (
-    <form onSubmit={(e) => { e.preventDefault(); update(d); toast.success("Profile updated"); }} className="space-y-3">
+    <form onSubmit={save} className="space-y-3">
       <Textarea value={d.about} onChange={(e) => setD({ ...d, about: e.target.value })} placeholder="About" className="bg-white/5 border-white/10" rows={4} />
       <Input value={d.resumeUrl} onChange={(e) => setD({ ...d, resumeUrl: e.target.value })} placeholder="Resume URL" className="bg-white/5 border-white/10" />
       <div className="grid sm:grid-cols-2 gap-2">
@@ -863,6 +877,7 @@ function Portfolio() {
   const [data, setData] = useState<PortfolioData>(() => loadData());
   const [active, setActive] = useState("home");
   const [adminOpen, setAdminOpen] = useState(false);
+  const [profileSettingsId, setProfileSettingsId] = useState<string | null>(null);
 
   useEffect(() => {
     setData(loadData());
@@ -872,9 +887,10 @@ function Portfolio() {
     let mounted = true;
     const loadRemote = async () => {
       try {
-        const [projects, certifications] = await Promise.all([fetchProjects(), fetchCertifications()]);
+        const [projects, certifications, profile] = await Promise.all([fetchProjects(), fetchCertifications(), fetchProfileSettings()]);
         if (!mounted) return;
-        setData((prev) => ({ ...prev, projects, certifications }));
+        setData((prev) => ({ ...prev, projects, certifications, ...(profile?.settings ?? {}) }));
+        setProfileSettingsId(profile?.id ?? null);
       } catch (error) {
         console.error(error);
         toast.error("Could not load projects/certifications from Supabase. Using local data.");
