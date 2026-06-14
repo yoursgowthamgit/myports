@@ -5,8 +5,7 @@ import {
   Sparkles, Cpu, Layers, Wrench, GraduationCap, Award, Terminal as TerminalIcon,
   Send, Lock, Plus, Pencil, Trash2, X, Menu,
 } from "lucide-react";
-import { DEFAULT_DATA, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
-import { fetchProjects, upsertProject, deleteProject, fetchCertifications, upsertCertification, deleteCertification, fetchProfileSettings, upsertProfileSettings } from "@/lib/supabase";
+import { loadData, saveData, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -682,7 +681,7 @@ function AdminPanel({
 
   const update = (patch: Partial<PortfolioData>) => {
     const next = { ...data, ...patch };
-    setData(next);
+    setData(next); saveData(next);
   };
 
   if (!open) return null;
@@ -708,7 +707,7 @@ function AdminPanel({
             <div className="mt-4">
               {tab === "projects" && <ProjectsAdmin data={data} update={update} />}
               {tab === "certs" && <CertsAdmin data={data} update={update} />}
-              {tab === "profile" && <ProfileAdmin data={data} update={update} profileSettingsId={profileSettingsId} setProfileSettingsId={setProfileSettingsId} />}
+              {tab === "profile" && <ProfileAdmin data={data} update={update} />}
             </div>
           </div>
         )}
@@ -721,30 +720,18 @@ function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Part
   const empty: Project = { id: "", title: "", description: "", image: "", tech: [], github: "", demo: "", category: "Web Development" };
   const [editing, setEditing] = useState<Project | null>(null);
 
-  const save = async (p: Project) => {
+  const save = (p: Project) => {
     const id = p.id || `p${Date.now()}`;
     const nextProject = { ...p, id };
     const exists = data.projects.find((x) => x.id === id);
-    const next = exists ? data.projects.map((x) => x.id === id ? nextProject : x) : [...data.projects, nextProject];
-    try {
-      await upsertProject(nextProject);
-      update({ projects: next });
-      setEditing(null);
-      toast.success("Saved");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not save project to Supabase.");
-    }
+    const next = exists ? data.projects.map((x) => (x.id === id ? nextProject : x)) : [...data.projects, nextProject];
+    update({ projects: next });
+    setEditing(null);
+    toast.success("Saved");
   };
-  const del = async (id: string) => {
-    try {
-      await deleteProject(id);
-      update({ projects: data.projects.filter((p) => p.id !== id) });
-      toast.success("Deleted");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not delete project from Supabase.");
-    }
+  const del = (id: string) => {
+    update({ projects: data.projects.filter((p) => p.id !== id) });
+    toast.success("Deleted");
   };
 
   return (
@@ -781,30 +768,18 @@ function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Part
 function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
   const empty: Certification = { id: "", name: "", issuer: "", date: "", image: "", url: "" };
   const [editing, setEditing] = useState<Certification | null>(null);
-  const save = async (c: Certification) => {
+  const save = (c: Certification) => {
     const id = c.id || `c${Date.now()}`;
     const nextCert = { ...c, id };
     const exists = data.certifications.find((x) => x.id === id);
-    const next = exists ? data.certifications.map((x) => x.id === id ? nextCert : x) : [...data.certifications, nextCert];
-    try {
-      await upsertCertification(nextCert);
-      update({ certifications: next });
-      setEditing(null);
-      toast.success("Saved");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not save certification to Supabase.");
-    }
+    const next = exists ? data.certifications.map((x) => (x.id === id ? nextCert : x)) : [...data.certifications, nextCert];
+    update({ certifications: next });
+    setEditing(null);
+    toast.success("Saved");
   };
-  const del = async (id: string) => {
-    try {
-      await deleteCertification(id);
-      update({ certifications: data.certifications.filter((c) => c.id !== id) });
-      toast.success("Deleted");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not delete certification from Supabase.");
-    }
+  const del = (id: string) => {
+    update({ certifications: data.certifications.filter((c) => c.id !== id) });
+    toast.success("Deleted");
   };
   return (
     <div className="space-y-3">
@@ -835,21 +810,14 @@ function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial
   );
 }
 
-function ProfileAdmin({ data, update, profileSettingsId, setProfileSettingsId }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void; profileSettingsId: string | null; setProfileSettingsId: (id: string | null) => void }) {
+function ProfileAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
   const [d, setD] = useState(data);
   useEffect(() => setD(data), [data]);
 
-  const save = async (e: React.FormEvent) => {
+  const save = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const id = await upsertProfileSettings(d, profileSettingsId || undefined);
-      setProfileSettingsId(id);
-      update(d);
-      toast.success("Profile updated");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not save profile settings to Supabase.");
-    }
+    update(d);
+    toast.success("Profile updated");
   };
 
   return (
@@ -874,26 +842,12 @@ function ProfileAdmin({ data, update, profileSettingsId, setProfileSettingsId }:
 
 // === Root ===
 function Portfolio() {
-  const [data, setData] = useState<PortfolioData>(() => DEFAULT_DATA);
+  const [data, setData] = useState<PortfolioData>(() => loadData());
   const [active, setActive] = useState("home");
   const [adminOpen, setAdminOpen] = useState(false);
-  const [profileSettingsId, setProfileSettingsId] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    const loadRemote = async () => {
-      try {
-        const [projects, certifications, profile] = await Promise.all([fetchProjects(), fetchCertifications(), fetchProfileSettings()]);
-        if (!mounted) return;
-        setData((prev) => ({ ...prev, projects, certifications, ...(profile?.settings ?? {}) }));
-        setProfileSettingsId(profile?.id ?? null);
-      } catch (error) {
-        console.error(error);
-        toast.error("Could not load projects/certifications from Supabase. Using local data.");
-      }
-    };
-    loadRemote();
-    return () => { mounted = false; };
+    setData(loadData());
   }, []);
 
   useEffect(() => {
