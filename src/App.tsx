@@ -577,7 +577,7 @@ function Terminal({ data }: { data: PortfolioData }) {
 }
 
 // === Contact (Formspark) ===
-const FORMSPARK_ID = "your-formspark-id";
+const FORMSPARK_ID = "IoQASOoZc";
 
 function Contact({ data }: { data: PortfolioData }) {
   const [loading, setLoading] = useState(false);
