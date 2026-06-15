@@ -5,7 +5,11 @@ import {
   Sparkles, Cpu, Layers, Wrench, GraduationCap, Award, Terminal as TerminalIcon,
   Send, Lock, Plus, Pencil, Trash2, X, Menu,
 } from "lucide-react";
-import { loadData, saveData, type PortfolioData, type Project, type Certification } from "@/lib/portfolio-data";
+import { 
+  loadData, saveData, subscribeToChanges, addProject, updateProject, deleteProject,
+  addCertification, updateCertification, deleteCertification,
+  type PortfolioData, type Project, type Certification 
+} from "@/lib/portfolio-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -671,18 +675,13 @@ function Footer({ data }: { data: PortfolioData }) {
 
 // === Admin ===
 function AdminPanel({
-  open, onClose, data, setData,
-}: { open: boolean; onClose: () => void; data: PortfolioData; setData: (d: PortfolioData) => void }) {
+  open, onClose, data,
+}: { open: boolean; onClose: () => void; data: PortfolioData }) {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState("");
   const [tab, setTab] = useState<"projects" | "certs" | "profile">("projects");
 
   useEffect(() => { if (!open) { setAuthed(false); setPw(""); } }, [open]);
-
-  const update = (patch: Partial<PortfolioData>) => {
-    const next = { ...data, ...patch };
-    setData(next); saveData(next);
-  };
 
   if (!open) return null;
   return (
@@ -705,9 +704,9 @@ function AdminPanel({
               ))}
             </div>
             <div className="mt-4">
-              {tab === "projects" && <ProjectsAdmin data={data} update={update} />}
-              {tab === "certs" && <CertsAdmin data={data} update={update} />}
-              {tab === "profile" && <ProfileAdmin data={data} update={update} />}
+              {tab === "projects" && <ProjectsAdmin data={data} />}
+              {tab === "certs" && <CertsAdmin data={data} />}
+              {tab === "profile" && <ProfileAdmin data={data} />}
             </div>
           </div>
         )}
@@ -716,22 +715,48 @@ function AdminPanel({
   );
 }
 
-function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
+function ProjectsAdmin({ data }: { data: PortfolioData }) {
   const empty: Project = { id: "", title: "", description: "", image: "", tech: [], github: "", demo: "", category: "Web Development" };
   const [editing, setEditing] = useState<Project | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const save = (p: Project) => {
-    const id = p.id || `p${Date.now()}`;
-    const nextProject = { ...p, id };
-    const exists = data.projects.find((x) => x.id === id);
-    const next = exists ? data.projects.map((x) => (x.id === id ? nextProject : x)) : [...data.projects, nextProject];
-    update({ projects: next });
-    setEditing(null);
-    toast.success("Saved");
+  const save = async (p: Project) => {
+    setSaving(true);
+    try {
+      if (p.id) {
+        // Update existing project
+        const success = await updateProject(p.id, p);
+        if (success) {
+          toast.success("Project updated");
+        } else {
+          toast.error("Failed to update project");
+        }
+      } else {
+        // Add new project
+        const result = await addProject(p);
+        if (result) {
+          toast.success("Project added");
+        } else {
+          toast.error("Failed to add project");
+        }
+      }
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
   };
-  const del = (id: string) => {
-    update({ projects: data.projects.filter((p) => p.id !== id) });
-    toast.success("Deleted");
+
+  const del = async (id: string) => {
+    try {
+      const success = await deleteProject(id);
+      if (success) {
+        toast.success("Project deleted");
+      } else {
+        toast.error("Failed to delete project");
+      }
+    } catch (err) {
+      toast.error("Error deleting project");
+    }
   };
 
   return (
@@ -758,29 +783,57 @@ function ProjectsAdmin({ data, update }: { data: PortfolioData; update: (p: Part
           <Input placeholder="GitHub URL" value={editing.github} onChange={(e) => setEditing({ ...editing, github: e.target.value })} className="bg-white/5 border-white/10" />
           <Input placeholder="Demo URL" value={editing.demo} onChange={(e) => setEditing({ ...editing, demo: e.target.value })} className="bg-white/5 border-white/10" />
           <Input placeholder="Category" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })} className="bg-white/5 border-white/10" />
-          <Button type="submit" className="w-full bg-primary text-primary-foreground">Save</Button>
+          <Button type="submit" disabled={saving} className="w-full bg-primary text-primary-foreground">{saving ? "Saving..." : "Save"}</Button>
         </form>
       )}
     </div>
   );
 }
 
-function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
+function CertsAdmin({ data }: { data: PortfolioData }) {
   const empty: Certification = { id: "", name: "", issuer: "", date: "", image: "", url: "" };
   const [editing, setEditing] = useState<Certification | null>(null);
-  const save = (c: Certification) => {
-    const id = c.id || `c${Date.now()}`;
-    const nextCert = { ...c, id };
-    const exists = data.certifications.find((x) => x.id === id);
-    const next = exists ? data.certifications.map((x) => (x.id === id ? nextCert : x)) : [...data.certifications, nextCert];
-    update({ certifications: next });
-    setEditing(null);
-    toast.success("Saved");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (c: Certification) => {
+    setSaving(true);
+    try {
+      if (c.id) {
+        // Update existing certification
+        const success = await updateCertification(c.id, c);
+        if (success) {
+          toast.success("Certification updated");
+        } else {
+          toast.error("Failed to update certification");
+        }
+      } else {
+        // Add new certification
+        const result = await addCertification(c);
+        if (result) {
+          toast.success("Certification added");
+        } else {
+          toast.error("Failed to add certification");
+        }
+      }
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
   };
-  const del = (id: string) => {
-    update({ certifications: data.certifications.filter((c) => c.id !== id) });
-    toast.success("Deleted");
+
+  const del = async (id: string) => {
+    try {
+      const success = await deleteCertification(id);
+      if (success) {
+        toast.success("Certification deleted");
+      } else {
+        toast.error("Failed to delete certification");
+      }
+    } catch (err) {
+      toast.error("Error deleting certification");
+    }
   };
+
   return (
     <div className="space-y-3">
       <Button size="sm" onClick={() => setEditing(empty)} className="bg-primary text-primary-foreground"><Plus className="h-4 w-4 mr-1" /> Add Certification</Button>
@@ -803,21 +856,30 @@ function CertsAdmin({ data, update }: { data: PortfolioData; update: (p: Partial
           <Input placeholder="Date" value={editing.date} onChange={(e) => setEditing({ ...editing, date: e.target.value })} className="bg-white/5 border-white/10" />
           <Input placeholder="Image URL" value={editing.image} onChange={(e) => setEditing({ ...editing, image: e.target.value })} className="bg-white/5 border-white/10" />
           <Input placeholder="Certificate URL" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} className="bg-white/5 border-white/10" />
-          <Button type="submit" className="w-full bg-primary text-primary-foreground">Save</Button>
+          <Button type="submit" disabled={saving} className="w-full bg-primary text-primary-foreground">{saving ? "Saving..." : "Save"}</Button>
         </form>
       )}
     </div>
   );
 }
 
-function ProfileAdmin({ data, update }: { data: PortfolioData; update: (p: Partial<PortfolioData>) => void }) {
+function ProfileAdmin({ data }: { data: PortfolioData }) {
   const [d, setD] = useState(data);
+  const [saving, setSaving] = useState(false);
   useEffect(() => setD(data), [data]);
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    update(d);
-    toast.success("Profile updated");
+    setSaving(true);
+    try {
+      await saveData(d);
+      toast.success("Profile updated");
+    } catch (err) {
+      toast.error("Failed to update profile");
+      console.error("Error saving profile:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -835,19 +897,40 @@ function ProfileAdmin({ data, update }: { data: PortfolioData; update: (p: Parti
         ))}
       </div>
       <Input type="password" value={d.adminPassword} onChange={(e) => setD({ ...d, adminPassword: e.target.value })} placeholder="Admin password" className="bg-white/5 border-white/10" />
-      <Button type="submit" className="w-full bg-primary text-primary-foreground">Save</Button>
+      <Button type="submit" disabled={saving} className="w-full bg-primary text-primary-foreground">{saving ? "Saving..." : "Save"}</Button>
     </form>
   );
 }
 
 // === Root ===
 function Portfolio() {
-  const [data, setData] = useState<PortfolioData>(() => loadData());
+  const [data, setData] = useState<PortfolioData | null>(null);
   const [active, setActive] = useState("home");
   const [adminOpen, setAdminOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Load initial data
   useEffect(() => {
-    setData(loadData());
+    const initData = async () => {
+      try {
+        const initialData = await loadData();
+        setData(initialData);
+      } catch (err) {
+        console.error("Failed to load portfolio data:", err);
+        toast.error("Failed to load portfolio data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    initData();
+  }, []);
+
+  // Real-time subscription
+  useEffect(() => {
+    const unsubscribe = subscribeToChanges((newData) => {
+      setData(newData);
+    });
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -869,9 +952,20 @@ function Portfolio() {
   }, []);
 
   const onResume = useCallback(() => {
-    if (!data.resumeUrl || data.resumeUrl === "#") { toast.info("Resume link not set yet. Open admin to add one."); return; }
+    if (!data || !data.resumeUrl || data.resumeUrl === "#") { toast.info("Resume link not set yet. Open admin to add one."); return; }
     window.open(data.resumeUrl, "_blank");
-  }, [data.resumeUrl]);
+  }, [data]);
+
+  if (loading || !data) {
+    return (
+      <div className="relative min-h-screen overflow-x-hidden flex items-center justify-center bg-gradient-to-b from-black via-black to-neutral-900">
+        <div className="text-center">
+          <div className="h-8 w-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin mx-auto" />
+          <p className="mt-4 text-muted-foreground">Loading portfolio...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -890,7 +984,7 @@ function Portfolio() {
           <Contact data={data} />
         </main>
         <Footer data={data} />
-        <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} data={data} setData={setData} />
+        <AdminPanel open={adminOpen} onClose={() => setAdminOpen(false)} data={data} />
       </div>
       <Toaster theme="dark" position="bottom-center" />
     </div>
